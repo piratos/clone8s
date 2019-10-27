@@ -1,0 +1,8 @@
+version: v0
+name: dummy pod
+namespace: podnamespace
+containers:
+    - name: container1
+      image: longrunningcontainer
+    - name: container2
+      image: longrunningcontainer
