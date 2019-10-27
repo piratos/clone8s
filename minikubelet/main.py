@@ -95,7 +95,7 @@ class MiniKubelet(object):
             if res:
                 print("Control loop ended -1")
             else:
-                print("Control loop ende 0")
+                print("Control loop ended 0")
             # Read pod spec and enque if any
             if os.path.exists(PODSPECADD):
                 podspec = open(PODSPECADD, 'r').read()
