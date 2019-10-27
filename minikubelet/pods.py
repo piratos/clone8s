@@ -36,7 +36,7 @@ class PodInterface(object):
         podspec: str
         """
         self.spec = yaml.load(podspec)
-        self.name = self.spec['name']
+        self.name = self.spec['name'].replace(' ', '_')
         self.containers = []
         self.netcontainer = None
         self.ip = None
@@ -45,7 +45,10 @@ class PodInterface(object):
         for container in self.containers_spec:
             self.containers.append(
                 Container(
-                    name=container['name'],
+                    name="{0}-{1}".format(
+                        self.name,
+                        container['name'].replace(' ', '_')
+                        ),
                     image=container['image']
                 )
             )
