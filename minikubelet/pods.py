@@ -35,11 +35,15 @@ class PodInterface(object):
         podspec: spec ofthe pod
         podspec: str
         """
-        self.spec = yaml.load(podspec)
+        self.spec = yaml.safe_load(podspec)
         self.name = self.spec['name'].replace(' ', '_')
         self.containers = []
-        self.netcontainer = None
+        self.parent_container = Container(
+            name = "{}-pause".format(self.name),
+            image = "kubernetes/pause:latest"
+        )
         self.ip = None
+        self.created = False
         self.containers_spec = self.spec['containers']
         # Create container objects
         for container in self.containers_spec:
@@ -55,46 +59,56 @@ class PodInterface(object):
         # client
         self.client = None
 
-    def start(self):
-        # To make containers share the same network interface
-        # we need the first to connect to a network
-        # and the rest to use network mode 'container'
+    def create(self):
         if len(self.containers) < 1:
             print("Nothing to be done no containers")
             return True
-        self.netcontainer = self.containers.pop(0)
-        self.netcontainer.networked = True
-        # Create the docker-py containers
-        # TODO: Use Create + start instead of run
-        self.netcontainer.container = self.client.containers.run(
-            name = self.netcontainer.name,
-            image = self.netcontainer.image,
+        # Start by creating a pause container as parent
+        pause_container = self.client.containers.create(
+            name = self.parent_container.name,
+            image = self.parent_container.image,
             detach = True
         )
+        self.parent_container.container = pause_container
+        # Create the docker-py containers
+        parent_mode = "container:{0}".format(self.parent_container.name)
         for container in self.containers:
-            container.container = self.client.containers.run(
+            # TODO: Add cgroup parent
+            container.container = self.client.containers.create(
                 name = container.name,
                 image = container.image,
                 detach = True,
-                network = "container:{0}".format(self.netcontainer.name)
-
+                network = parent_mode,
+                ipc_mode = parent_mode,
+                pid_mode = parent_mode,
             )
+        self.created = True
+
+    def start(self):
+        # Create the Pod containers for the first time
+        if not self.created:
+            self.create()
+        # start parent container first
+        self.parent_container.container.start()
+        # start the pod containers (order does not matter)
+        for container in self.containers:
+            container.container.start()
 
     def stop(self):
         # stop non networked container first
         for container in self.containers:
-            container.container.kill()
-        self.netcontainer.container.kill()
+            # Only kill running container
+            container.container.reload()
+            if container.container.status == "running":
+                container.container.kill()
+        self.parent_container.container.kill()
         # TODO: look for prune per kill
         self.client.containers.prune()
 
     def status(self):
         # reload and return status
         statuses = []
-        self.netcontainer.container.reload()
-        statuses.append(self.netcontainer.container.status)
         for container in self.containers:
             container.container.reload()
             statuses.append(container.container.status)
         return statuses
-
