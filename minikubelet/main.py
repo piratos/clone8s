@@ -1,5 +1,6 @@
 import docker
 import os
+import threading
 import time
 
 from pods import PodInterface
@@ -18,11 +19,11 @@ class MiniKubelet(object):
     def __init__(self, node):
         print("Start MiniKubelet process")
         self.node = node
+        self.exit = False
         # TODO: Use sophisticated queue system
         # queue is a list of (action, podspec, tries)
         self.queue = []
         self.pods = {}
-
         print("MiniKubelet started as node: {}".format(self.node))
 
     def add_pod(self, podspec):
@@ -62,7 +63,8 @@ class MiniKubelet(object):
             print("Pod {} does not exist".format(name))
             # Use python 3.6 f string ?
             print("Cannot delete Pod {}".format(name))
-            return False
+            # The pod does not exist, dont requeue the event
+            return True
         print("Pod {} is going to be deleted".format(name))
         self.pods[name].stop()
         del self.pods[name]
@@ -81,7 +83,12 @@ class MiniKubelet(object):
                 pod_func = self.delete_pod
             else:
                 return False
-            if not pod_func(podspec):
+            res = None
+            try:
+                res = pod_func(podspec)
+            except Exception:
+                pass
+            if not res:
                 # enqueue back
                 self.queue.append((action, podspec, tries+1))
                 return False
@@ -90,23 +97,15 @@ class MiniKubelet(object):
 
     def control_loop(self):
         while True:
+            if self.exit:
+                print("Existing control loop")
+                break
             # apply control actions
             res = self.control_func()
             if res:
                 print("Control loop ended -1")
             else:
                 print("Control loop ended 0")
-            # Read pod spec and enque if any
-            if os.path.exists(PODSPECADD):
-                podspec = open(PODSPECADD, 'r').read()
-                self.queue.append(('add', podspec, 0))
-                os.remove(PODSPECADD)
-                print("Adding podspec")
-            if os.path.exists(PODSPECRM):
-                podspec = open(PODSPECRM, 'r').read()
-                self.queue.append(('delete', podspec, 0))
-                os.remove(PODSPECRM)
-                print("Removing podspec")
             # status the pods
             for name, pod in self.pods.items():
                 print("Pod {0} statuses: {1}".format(
@@ -114,8 +113,20 @@ class MiniKubelet(object):
                     pod.status())
                 )
             time.sleep(3)
+    def run(self):
+        control_loop_thread = threading.Thread(target=self.control_loop)
+        control_loop_thread.start()
+        try:
+            while True:
+                time.sleep(1)
+                # TODO: check sophisticated event loop framework
+        except KeyboardInterrupt:
+            print("Waiting for control loop to exit")
+            self.exit = True
+            control_loop_thread.join()
+            print("Exiting main function")
 
 
 if __name__ == '__main__':
     minikubelet = MiniKubelet(node="node1")
-    minikubelet.control_loop()
+    minikubelet.run()
