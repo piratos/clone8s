@@ -1,114 +1,60 @@
-#! /usr/bin/env python
-# -*- coding: utf-8 -*-
-# vim:fenc=utf-8
-#
-# Copyright © 2019 piratos <piratos@zitoun>
-#
-# Distributed under terms of the MIT license.
+import docker
 
-"""
-This module handle the object Pod
-PodSpec
-name: podname
-namespace: podnamespace
-containers:
-    - name: container1name
-      image: container1Image
-    - name: container2name
-      image: container2Image
-"""
-
-import yaml
+from base import BaseManager
+from pod import PodInterface
 
 
-class Container(object):
-    def __init__(self, name, image, container=None):
-        self.name = name
-        self.image = image
-        self.networked = False
-        # docker-py container object
-        self.container = container
-
-class PodInterface(object):
+# TODO: clean this
+# This hack is to avoid initializing the python client for each pod
+class Pod(PodInterface):
     def __init__(self, podspec):
-        """
-        podspec: spec ofthe pod
-        podspec: str
-        """
-        self.spec = yaml.safe_load(podspec)
-        self.name = self.spec['name'].replace(' ', '_')
-        self.containers = []
-        self.parent_container = Container(
-            name = "{}-pause".format(self.name),
-            image = "kubernetes/pause:latest"
-        )
-        self.ip = None
-        self.created = False
-        self.containers_spec = self.spec['containers']
-        # Create container objects
-        for container in self.containers_spec:
-            self.containers.append(
-                Container(
-                    name="{0}-{1}".format(
-                        self.name,
-                        container['name'].replace(' ', '_')
-                        ),
-                    image=container['image']
-                )
-            )
-        # client
-        self.client = None
+        super().__init__(podspec)
+        self.client = docker.from_env()
 
-    def create(self):
-        if len(self.containers) < 1:
-            print("Nothing to be done no containers")
+
+class PodManager(BaseManager):
+
+    def add_pod(self, podspec):
+        tmp_pod = Pod(podspec)
+        name = tmp_pod.name
+        if name in self.k.pods:
+            print("{} name is reserved by an existing Pod".format(name))
+            print("Cannot add Pod {}".format(name))
+            return False
+        else:
+            print("Starting Pod {}".format(name))
+            self.k.pods[name] = tmp_pod
+            self.k.pods[name].start()
+            print("Pod {} started".format(name))
+        return True
+
+    def update_pod(self, podspec):
+        tmp_pod = Pod(podspec)
+        name = tmp_pod.name
+        if name in self.k.pods:
+            # Pod needs to be updated delete old and create new
+            print("Pod {} going to be updated".format(name))
+            self.k.pods[name].stop()
+            self.k.pods[name] = tmp_pod
+            self.k.pods[name].start()
+            print("Pod {} Updated".format(name))
             return True
-        # Start by creating a pause container as parent
-        pause_container = self.client.containers.create(
-            name = self.parent_container.name,
-            image = self.parent_container.image,
-            detach = True
-        )
-        self.parent_container.container = pause_container
-        # Create the docker-py containers
-        parent_mode = "container:{0}".format(self.parent_container.name)
-        for container in self.containers:
-            # TODO: Add cgroup parent
-            container.container = self.client.containers.create(
-                name = container.name,
-                image = container.image,
-                detach = True,
-                network = parent_mode,
-                ipc_mode = parent_mode,
-                pid_mode = parent_mode,
-            )
-        self.created = True
+        else:
+            # TODO: handle error properly
+            print("Pod {} Does not exist".format(name))
+            return False
 
-    def start(self):
-        # Create the Pod containers for the first time
-        if not self.created:
-            self.create()
-        # start parent container first
-        self.parent_container.container.start()
-        # start the pod containers (order does not matter)
-        for container in self.containers:
-            container.container.start()
-
-    def stop(self):
-        # stop non networked container first
-        for container in self.containers:
-            # Only kill running container
-            container.container.reload()
-            if container.container.status == "running":
-                container.container.kill()
-        self.parent_container.container.kill()
-        # TODO: look for prune per kill
-        self.client.containers.prune()
-
-    def status(self):
-        # reload and return status
-        statuses = []
-        for container in self.containers:
-            container.container.reload()
-            statuses.append(container.container.status)
-        return statuses
+    def delete_pod(self, podspec):
+        tmp_pod = Pod(podspec)
+        name = tmp_pod.name
+        if not name in self.k.pods:
+            print("Pod {} does not exist".format(name))
+            # Use python 3.6 f string ?
+            print("Cannot delete Pod {}".format(name))
+            # The pod does not exist, dont requeue the event
+            return True
+        print("Pod {} is going to be deleted".format(name))
+        self.k.pods[name].stop()
+        del self.k.pods[name]
+        print("Pod {} deleted".format(name))
+        return True
