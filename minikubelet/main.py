@@ -9,10 +9,13 @@ from pods import PodManager
 
 
 class MiniKubelet(object):
-    def __init__(self, node):
+    def __init__(self, node, cert=None, apiserver=None):
         print("Start MiniKubelet process")
         self.node = node
+        self.apiserver = apiserver
+        self.cert = cert
         self.exit = False
+        self.registered = False
         # TODO: Use sophisticated queue system
         # queue is a list of (action, podspec, tries)
         self.queue = []
@@ -59,7 +62,7 @@ class MiniKubelet(object):
             if res:
                 print("Control loop ended -1")
             else:
-                print("Control loop ended 0")
+                pass
             # status the pods
             for name, pod in self.pods.items():
                 print("Pod {0} statuses: {1}".format(
@@ -68,13 +71,17 @@ class MiniKubelet(object):
                 )
             time.sleep(3)
     def run(self):
-        control_loop_thread = threading.Thread(target=self.control_loop)
+        control_loop_thread = threading.Thread(
+            target=self.control_loop
+        )
         control_loop_thread.start()
+        self.network_manager.receive()
         try:
             while True:
                 time.sleep(1)
                 # TODO: check sophisticated event loop framework
         except KeyboardInterrupt:
+            self.network_manager.stop()
             print("Waiting for control loop to exit")
             self.exit = True
             control_loop_thread.join()
