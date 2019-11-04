@@ -10,8 +10,9 @@ from pods import PodManager
 
 class MiniKubelet(object):
     def __init__(self, node, cert=None, apiserver=None):
-        print("Start MiniKubelet process")
+        print("[+] Start MiniKubelet process")
         self.node = node
+        self.ip = '0.0.0.0'
         self.apiserver = apiserver
         self.cert = cert
         self.exit = False
@@ -20,12 +21,12 @@ class MiniKubelet(object):
         # queue is a list of (action, podspec, tries)
         self.queue = []
         self.pods = {}
-        print("Loading managers")
+        print("[+] Loading managers")
         self.log_manager = LogManager(self)
         self.metric_manager = MetricManager(self)
         self.network_manager = NetworkManager(self)
         self.pod_manager = PodManager(self)
-        print("MiniKubelet started as node: {}".format(self.node))
+        print("[+] MiniKubelet started as node: {}".format(self.node))
 
 
     def control_func(self):
@@ -75,6 +76,8 @@ class MiniKubelet(object):
             target=self.control_loop
         )
         control_loop_thread.start()
+        print("[+] Attempting registration")
+        self.network_manager.register_to_apiserver()
         self.network_manager.receive()
         try:
             while True:
@@ -82,12 +85,16 @@ class MiniKubelet(object):
                 # TODO: check sophisticated event loop framework
         except KeyboardInterrupt:
             self.network_manager.stop()
-            print("Waiting for control loop to exit")
+            print("[+] Waiting for control loop to exit")
             self.exit = True
             control_loop_thread.join()
-            print("Exiting main function")
+            print("[+] Exiting main function")
 
 
 if __name__ == '__main__':
-    minikubelet = MiniKubelet(node="node1")
+    minikubelet = MiniKubelet(
+        node="node-1",
+        cert='kubelet.crt',
+        apiserver='localhost'
+    )
     minikubelet.run()

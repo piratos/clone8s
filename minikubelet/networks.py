@@ -1,9 +1,14 @@
-from base import BaseManager
+import json
+import requests
+
 import pika
+
+from base import BaseManager
+
 
 class NetworkManager(BaseManager):
     def __init__(self, minikublet, rbmq_host="localhost"):
-        print("Init NetworkManager")
+        print("[+] Init NetworkManager")
         super(NetworkManager, self).__init__(minikublet)
         self.cnx = None
         self.queue_name = 'metrics'
@@ -37,13 +42,39 @@ class NetworkManager(BaseManager):
         # if first time to run the node then register with apiserver
         # else load the queue messages and start watching
 
-    def post_to_apiserver(self, payload):
-        pass
+    def post_to_apiserver(self, endpoint, payload):
+        url = 'http://{0}:8080/{1}'.format(
+            self.k.apiserver,
+            endpoint
+        )
+        print("Sending payload: {}".format(payload))
+        r = requests.post(url=url, json=payload)
+        return r.text
 
     def register_to_apiserver(self):
         # registration with apiserver is basically successfully
         # creating a node object in the apiserver
-        pass
+        # post node data to http://apiserver/node/-1
+        payload = {
+            'name': self.k.node,
+            'cert': open(self.k.cert, 'r').read(),
+            'ip': self.k.ip
+        }
+        res = self.post_to_apiserver(
+            endpoint='node/1',
+            payload=payload
+        )
+        result = json.loads(res)
+        if result.get('result') == 'OK':
+            print("[+] successfully registered to the apiserver")
+            return True
+        elif result.get('result') == 'NOK':
+            print("[+] Cannot register to the apiserver")
+            print("[+] Reason: {}".format(result.get('reason')))
+            return False
+        print("Unknown error, Registration failed")
+        return False
+
 
     def pod_callback(self, channel, method, properties, body):
         print('[+] Message received: ',body)
@@ -56,7 +87,7 @@ class NetworkManager(BaseManager):
         #     callback=self.pod_callback
         # )
         # Then subscribe to the queue updates
-        print("Start consuming events")
+        print("[+] Start consuming events")
         self.channel.basic_consume(
             self.queue_name,
             self.pod_callback
