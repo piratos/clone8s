@@ -1,5 +1,8 @@
+import json
 import logging
 import multiprocessing
+
+import etcd
 
 from flask_restful import Api, abort, Resource, reqparse
 from flask_httpauth import HTTPBasicAuth
@@ -25,6 +28,11 @@ class KResource(Resource):
     }
     #decorators = [auth.login_required]
 
+    def __init__(self, etcd_client, apiserver):
+        super(KResource, self).__init__()
+        self.etcd = etcd_client
+        self.a = apiserver
+
     def post(self, resource_id):
         args = self.reqparse.parse_args()
         args['id'] = resource_id
@@ -41,7 +49,8 @@ class KResource(Resource):
 
 
 class Pod(KResource):
-    def __init__(self):
+    def __init__(self, etcd_client, apiserver):
+        super(Pod, self).__init__(etcd_client, apiserver)
         self.reqparse = reqparse.RequestParser()
         self.reqparse.add_argument(
             'name', type=str, required=True, location='json'
@@ -49,11 +58,10 @@ class Pod(KResource):
         self.reqparse.add_argument(
             'podspec', type=str, required=True, location='json'
         )
-        super(Pod).__init__()
-
 
 class Node(KResource):
-    def __init__(self):
+    def __init__(self, etcd_client, apiserver):
+        super(Node, self).__init__(etcd_client, apiserver)
         self.reqparse = reqparse.RequestParser()
         self.reqparse.add_argument(
             'name', type=str, required=True, location='json'
@@ -64,13 +72,41 @@ class Node(KResource):
         self.reqparse.add_argument(
             'ip', type=str, required=True, location='json'
         )
-        super(Node).__init__()
+
+    # TODO: use validation decorator insead
+    def post(self, resource_id):
+        data = super(Node, self).post(resource_id)
+        # try registering a node (check certificate)
+        js = data.json
+        res = self.a.try_register_node(
+            name=js['name'], cert=js['cert'], ip=js['ip']
+        )
+        if res:
+            self.etcd.write(
+                '/nodes/{}'.format(js['name']),
+                json.dumps(js)
+            )
+            return jsonify({'result': 'OK', 'reason': ''})
+        return jsonify({'result': 'NOK', 'reason': 'Cannot verify node'})
 
 
 class ApiManager(object):
-    def __init__(self, apiserver):
+    def __init__(self, apiserver, etcd_host, etcd_port=None):
         print("Init ApiManager")
         self.a = apiserver
+        # Connect to the etcd instance
+        self.etcd = None
+        try:
+            if etcd_port:
+                self.etcd = etcd.Client(
+                    host=etcd_host,
+                    port=etcd_port
+                )
+            else:
+                self.etcd = etcd.Client(host=etcd_host)
+        except:
+            print("Cannot connect to etcd at host {}".format(etcd_host))
+            return
         self.app = Flask('MiniApiServer')
         # disable flask stdout as it is a backgrounded process
         #self.app.logger.setLevel(logging.ERROR)
@@ -79,9 +115,17 @@ class ApiManager(object):
         # TODO: this does not work look for another solution
         self.api = Api(self.app)
         # register nodes
-        self.api.add_resource(Node, '/node/<resource_id>')
+        self.api.add_resource(
+            Node,
+            '/node/<resource_id>',
+            resource_class_args=(self.etcd, self.a)
+        )
         # register pods
-        self.api.add_resource(Pod, '/pod/<resource_id>')
+        self.api.add_resource(
+            Pod,
+            '/pod/<resource_id>',
+            resource_class_args=(self.etcd, self.a)
+        )
         # apisever process
         self.server = multiprocessing.Process(
             target=self.app.run,
@@ -91,9 +135,11 @@ class ApiManager(object):
             ),
             kwargs={
                 'threaded': True,
+                'debug': True
             },
             daemon=True,
         )
+
     def serve(self):
         print("Start listening to apiserver requests")
         self.server.start()

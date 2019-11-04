@@ -26,11 +26,15 @@ class KubeletManager(object):
         store.add_cert(node_certificate)
         store_context = crypto.X509StoreContext(store, self.a.ca_cert)
         try:
-            store_context.validate_certificate()
-        except crypto.X509StoreContextError:
-            print("Cannot validate certificate for node {}".format(node_name))
+            store_context.verify_certificate()
+        except crypto.X509StoreContextError as ex:
+            print(
+                "Cannot validate certificate for node {0}".format(
+                    node.name
+                )
+            )
             return False
-        print("Certificate for node {} validated".format(node_name))
+        print("Certificate for node {} validated".format(node.name))
         return True
 
     def add_node(self, node_name, cert, node_ip_addr, hostname=None):
