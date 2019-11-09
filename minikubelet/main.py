@@ -76,6 +76,8 @@ class MiniKubelet(object):
             target=self.control_loop
         )
         control_loop_thread.start()
+        # Make sure apiserver is up before progressing
+        self.network_manager.wait_apiserver()
         print("[+] Attempting registration")
         self.network_manager.register_to_apiserver()
         # when registered a queue with the node name will be created

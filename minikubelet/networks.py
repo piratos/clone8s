@@ -95,6 +95,17 @@ class NetworkManager(BaseManager):
         )
         self.channel.start_consuming()
 
+    def wait_apiserver(self):
+        print("Waiting for apiserver to be up")
+        url = "http://{}:8080".format(self.k.apiserver)
+        while True:
+            try:
+                requests.get(url)
+                print("Api server running! continuing...")
+                break
+            except requests.exceptions.ConnectionError:
+                continue
+
     def stop(self):
         self.channel.stop_consuming()
         self.cnx.close()
