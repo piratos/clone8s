@@ -28,10 +28,9 @@ class KResource(Resource):
     }
     #decorators = [auth.login_required]
 
-    def __init__(self, etcd_client, apiserver):
+    def __init__(self, apimanager):
         super(KResource, self).__init__()
-        self.etcd = etcd_client
-        self.a = apiserver
+        self.api = apimanager
 
     def post(self, resource_id):
         args = self.reqparse.parse_args()
@@ -49,8 +48,8 @@ class KResource(Resource):
 
 
 class Pod(KResource):
-    def __init__(self, etcd_client, apiserver):
-        super(Pod, self).__init__(etcd_client, apiserver)
+    def __init__(self, apimanager):
+        super(Pod, self).__init__(apimanager)
         self.reqparse = reqparse.RequestParser()
         self.reqparse.add_argument(
             'name', type=str, required=True, location='json'
@@ -60,8 +59,8 @@ class Pod(KResource):
         )
 
 class Node(KResource):
-    def __init__(self, etcd_client, apiserver):
-        super(Node, self).__init__(etcd_client, apiserver)
+    def __init__(self, apimanager):
+        super(Node, self).__init__(apimanager)
         self.reqparse = reqparse.RequestParser()
         self.reqparse.add_argument(
             'name', type=str, required=True, location='json'
@@ -78,16 +77,27 @@ class Node(KResource):
         data = super(Node, self).post(resource_id)
         # try registering a node (check certificate)
         js = data.json
-        res = self.a.try_register_node(
+        # Dont go intoregistering if node exists
+        if self.api._etcd_get('/nodes/{}'.format(js['name'])):
+            return jsonify(
+                {'result': 'OK', 'reason': 'Node already registered'}
+            )
+        res = self.api.a.try_register_node(
             name=js['name'], cert=js['cert'], ip=js['ip']
         )
         if res:
-            self.etcd.write(
+            self.api._etcd_write(
                 '/nodes/{}'.format(js['name']),
                 json.dumps(js)
             )
             return jsonify({'result': 'OK', 'reason': ''})
         return jsonify({'result': 'NOK', 'reason': 'Cannot verify node'})
+
+    def get(self, resource_id):
+        node_obj = self.api._etcd_get('/nodes/{}'.format(resource_id))
+        if node_obj:
+            return jsonify(node_obj)
+        return jsonify({})
 
 
 class ApiManager(object):
@@ -117,14 +127,14 @@ class ApiManager(object):
         # register nodes
         self.api.add_resource(
             Node,
-            '/node/<resource_id>',
-            resource_class_args=(self.etcd, self.a)
+            '/nodes/<resource_id>',
+            resource_class_args=(self, )
         )
         # register pods
         self.api.add_resource(
             Pod,
-            '/pod/<resource_id>',
-            resource_class_args=(self.etcd, self.a)
+            '/pods/<resource_id>',
+            resource_class_args=(self, )
         )
         # apisever process
         self.server = multiprocessing.Process(
@@ -135,10 +145,20 @@ class ApiManager(object):
             ),
             kwargs={
                 'threaded': True,
-                'debug': True
+                'debug': False
             },
             daemon=True,
         )
+
+    def _etcd_get(self, key):
+        """Pythonic get instead of raising exception"""
+        try:
+            return self.etcd.get(key).value
+        except etcd.EtcdKeyNotFound:
+            return None
+
+    def _etcd_write(self, key, value):
+        return self.etcd.write(key, value)
 
     def serve(self):
         print("Start listening to apiserver requests")

@@ -25,15 +25,24 @@ class MiniApiServer(object):
     def try_register_node(self, name, cert, ip):
         print("Starting registration process for node {}".format(name))
         tmp_node = kubelets.Node(name, cert, ip)
-        return self.k_manager.verify_node(tmp_node)
+        if self.k_manager.verify_node(tmp_node):
+            # Create a pod spec queue for this kubelet
+            print(
+                "Create queue: {0} for kubelet from node {0}".format(
+                    name
+                )
+            )
+            self.w_manager.add_queue(name)
+            return True
+        return False
 
     def control_loop(self):
         # start serving
         self.a_manager.serve()
         while True:
-            time.sleep(10)
-            print("--api sever control loop--")
-            self.w_manager.push_metrics("{'metrics: 120'}")
+            time.sleep(20)
+            #print("--api sever control loop--")
+            #self.w_manager.push_metrics("{'metrics: 120'}")
 
     def run(self):
         try:
