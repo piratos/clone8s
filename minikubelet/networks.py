@@ -11,7 +11,8 @@ class NetworkManager(BaseManager):
         print("[+] Init NetworkManager")
         super(NetworkManager, self).__init__(minikublet)
         self.cnx = None
-        self.queue_name = 'metrics'
+        # the queue we listen on is named after the node
+        self.queue_name = minikublet.node
         try:
             credentials = pika.PlainCredentials('guest', 'guest')
             self.cnx = pika.BlockingConnection(
@@ -61,7 +62,7 @@ class NetworkManager(BaseManager):
             'ip': self.k.ip
         }
         res = self.post_to_apiserver(
-            endpoint='node/1',
+            endpoint='nodes/1',
             payload=payload
         )
         result = json.loads(res)
