@@ -1,14 +1,14 @@
 import json
 import logging
 import multiprocessing
+import os
 
 import etcd
 
 from flask_restful import Api, abort, Resource, reqparse
+from flask_restful import reqparse
 from flask_httpauth import HTTPBasicAuth
 from flask import Flask, jsonify
-
-from flask_restful import reqparse
 
 
 # TODO: implement a cert authentication
@@ -57,6 +57,25 @@ class Pod(KResource):
         self.reqparse.add_argument(
             'podspec', type=str, required=True, location='json'
         )
+
+    # TODO: remove the usage of resource id on posts
+    def post(self, resource_id):
+        data = super(Pod, self).post(resource_id)
+        js = data.json
+        # TODO: base on UIDs not names
+        self.api._etcd_write(
+            '/pods/{}'.format(js['name']),
+            js['podspec']
+        )
+        # TODO: replace jsonify() with standard function
+        return jsonify({'result': 'OK', 'reason': ''})
+
+    def get(self, resource_id):
+        podobj = self.api._etcd_get('/pods/{}'.format(resource_id))
+        if podobj:
+            return jsonify(podobj)
+        return jsonify({})
+
 
 class Node(KResource):
     def __init__(self, apimanager):
@@ -137,6 +156,7 @@ class ApiManager(object):
             resource_class_args=(self, )
         )
         # apisever process
+        os.environ['FLASK_ENV'] = 'development'
         self.server = multiprocessing.Process(
             target=self.app.run,
             args=(

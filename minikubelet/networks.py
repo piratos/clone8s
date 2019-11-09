@@ -7,7 +7,7 @@ from base import BaseManager
 
 
 class NetworkManager(BaseManager):
-    def __init__(self, minikublet, rbmq_host="localhost"):
+    def __init__(self, minikublet, rbmqhost="localhost"):
         print("[+] Init NetworkManager")
         super(NetworkManager, self).__init__(minikublet)
         self.cnx = None
@@ -17,7 +17,7 @@ class NetworkManager(BaseManager):
             credentials = pika.PlainCredentials('guest', 'guest')
             self.cnx = pika.BlockingConnection(
                 pika.ConnectionParameters(
-                    rbmq_host,
+                    rbmqhost,
                     credentials=credentials
                 )
             )
@@ -76,10 +76,29 @@ class NetworkManager(BaseManager):
         print("Unknown error, Registration failed")
         return False
 
+    def get_pod(self, podname):
+        url = "http://{0}:8080/pods/{1}".format(
+            self.k.apiserver,
+            podname)
+        res = requests.get(url)
+        if res.ok:
+            return res.text
+        return ""
 
     def pod_callback(self, channel, method, properties, body):
-        print('[+] Message received: ',body)
+        """
+        Message in pod queue contains action and pod name in json format
+        ex: {'action': 'add', 'podname': '<podname>'}
+        """
+        print('[+] Message received: ', body)
+        msg = json.loads(body)
         self.channel.basic_ack(delivery_tag=method.delivery_tag)
+        # get the pod spec from apiserver
+        action = msg['action']
+        podspec = self.get_pod(msg['podname'])
+        # push to internal kubelet queue on the format
+        # (action, podspec, tries)
+        self.k.queue.append((action, podspec, 0))
 
     def receive(self):
         # First recover old events

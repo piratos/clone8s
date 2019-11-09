@@ -9,7 +9,7 @@ from pods import PodManager
 
 
 class MiniKubelet(object):
-    def __init__(self, node, cert=None, apiserver=None):
+    def __init__(self, node, cert=None, apiserver=None, rbmqhost='localhost'):
         print("[+] Start MiniKubelet process")
         self.node = node
         self.ip = '0.0.0.0'
@@ -24,13 +24,14 @@ class MiniKubelet(object):
         print("[+] Loading managers")
         self.log_manager = LogManager(self)
         self.metric_manager = MetricManager(self)
-        self.network_manager = NetworkManager(self)
+        self.network_manager = NetworkManager(self, rbmqhost=rbmqhost)
         self.pod_manager = PodManager(self)
         print("[+] MiniKubelet started as node: {}".format(self.node))
 
 
     def control_func(self):
         if len(self.queue) > 0:
+            print("Reading podspec from internal queue")
             action, podspec, tries = self.queue.pop(0)
             pod_func = None
             if action == 'add':
@@ -99,6 +100,7 @@ if __name__ == '__main__':
     minikubelet = MiniKubelet(
         node="node-1",
         cert='kubelet.crt',
-        apiserver='localhost'
+        apiserver='localhost',
+        rbmqhost='localhost'
     )
     minikubelet.run()

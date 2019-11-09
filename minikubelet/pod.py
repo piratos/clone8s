@@ -35,7 +35,9 @@ class PodInterface(object):
         podspec: spec ofthe pod
         podspec: str
         """
+        # TODO: whyy ??
         self.spec = yaml.safe_load(podspec)
+        self.spec = yaml.safe_load(self.spec)
         self.name = self.spec['name'].replace(' ', '_')
         self.containers = []
         self.parent_container = Container(
@@ -121,7 +123,7 @@ class PodInterface(object):
             else:
                 failed.append(container)
         short_res =  "{0}/{1}".format(running, len(self.containers))
-        long_res = "\n".joint([
+        long_res = "\n".join([
                 "container {0} failed".format(c) for c in failed])
         if info:
             return "{0}\n{1}".format(short_res, long_res)
