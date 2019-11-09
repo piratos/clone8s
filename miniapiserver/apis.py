@@ -59,6 +59,7 @@ class Pod(KResource):
         )
 
 class Node(KResource):
+
     def __init__(self, apimanager):
         super(Node, self).__init__(apimanager)
         self.reqparse = reqparse.RequestParser()
