@@ -1,5 +1,6 @@
 import json
 import requests
+import time
 
 import pika
 
@@ -22,8 +23,8 @@ class NetworkManager(BaseManager):
                 )
             )
         except pika.exceptions.AMQPConnectionError:
-            print("Cannot connect to rabbitMQ at host {}".format(
-                rbmq_host))
+            print("[!] Cannot connect to rabbitMQ at host {}".format(
+                rbmqhost))
             return
         # use channel to not load RBMQ
         self.channel = self.cnx.channel()
@@ -56,6 +57,7 @@ class NetworkManager(BaseManager):
         # registration with apiserver is basically successfully
         # creating a node object in the apiserver
         # post node data to http://apiserver/node/-1
+        self.wait_apiserver()
         payload = {
             'name': self.k.node,
             'cert': open(self.k.cert, 'r').read(),
@@ -98,6 +100,8 @@ class NetworkManager(BaseManager):
         podspec = self.get_pod(msg['podname'])
         # push to internal kubelet queue on the format
         # (action, podspec, tries)
+        if podspec == "{}":
+            return
         self.k.queue.append((action, podspec, 0))
 
     def receive(self):
@@ -115,16 +119,19 @@ class NetworkManager(BaseManager):
         self.channel.start_consuming()
 
     def wait_apiserver(self):
-        print("Waiting for apiserver to be up")
+        print("[+] Waiting for apiserver to be up")
         url = "http://{}:8080".format(self.k.apiserver)
         while True:
             try:
                 requests.get(url)
-                print("Api server running! continuing...")
+                print("[+] Api server running! continuing...")
                 break
             except requests.exceptions.ConnectionError:
+                time.sleep(3)
                 continue
 
     def stop(self):
-        self.channel.stop_consuming()
-        self.cnx.close()
+        # Only stop cnx if it is established
+        if self.cnx:
+            self.channel.stop_consuming()
+            self.cnx.close()
