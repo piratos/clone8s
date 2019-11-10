@@ -45,7 +45,8 @@ class PodInterface(object):
             name = "{}-pause".format(self.name),
             image = "kubernetes/pause:latest"
         )
-        self.ip = None
+        self.ip = self.spec.get("ip")
+        self.network = None
         self.created = False
         self.containers_spec = self.spec['containers']
         # Create container objects
@@ -63,6 +64,8 @@ class PodInterface(object):
         self.client = None
 
     def create(self):
+        if self.created:
+            return
         if len(self.containers) < 1:
             print("Nothing to be done no containers")
             return True
@@ -70,7 +73,8 @@ class PodInterface(object):
         pause_container = self.client.containers.create(
             name = self.parent_container.name,
             image = self.parent_container.image,
-            detach = True
+            detach = True,
+            network_mode = None
         )
         self.parent_container.container = pause_container
         # Create the docker-py containers
@@ -81,10 +85,11 @@ class PodInterface(object):
                 name = container.name,
                 image = container.image,
                 detach = True,
-                network = parent_mode,
+                network_mode = parent_mode,
                 ipc_mode = parent_mode,
                 pid_mode = parent_mode,
             )
+            print(container.container)
         self.created = True
 
     def reload(self):
@@ -118,6 +123,9 @@ class PodInterface(object):
         running = 0
         failed = []
         for container in self.containers:
+            if not container.container:
+                failed.append(container)
+                continue
             container.container.reload()
             if container.container.status == "running":
                 running += 1
@@ -140,3 +148,13 @@ class PodInterface(object):
             for container in self.containers:
                 logs[container.name] = container.container.logs()
             return logs
+
+    def get_ip(self):
+        if not self.network:
+            return None
+        self.parent_container.container.reload()
+        c_attrs = self.parent_container.container.attrs
+        c_net = c_attrs.get("NetworkSettigns", {}).get("Networks").get(self.network)
+        if c_net["IPAddress"]:
+            self.ip = c_net["IPAddress"]
+        return self.ip

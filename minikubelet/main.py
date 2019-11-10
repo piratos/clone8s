@@ -15,10 +15,15 @@ class MiniKubelet(object):
         cert=None,
         apiserver=None,
         rbmqhost='localhost',
-        manifest_folder='./manifests'):
+        manifest_folder='./manifests',
+        ip_pool="192.168.5.0/24",
+        debug=False):
         print("[+] Start MiniKubelet process")
+        self.debug = debug
         self.node = node
         self.ip = '0.0.0.0'
+        self.ip_pool = ip_pool
+        self.network_name = "{}-bridge".format(self.node)
         self.apiserver = apiserver
         self.cert = cert
         self.exit = False
@@ -34,7 +39,9 @@ class MiniKubelet(object):
         self.log_manager = LogManager(self)
         self.metric_manager = MetricManager(self)
         self.network_manager = NetworkManager(self, rbmqhost=rbmqhost)
-        self.pod_manager = PodManager(self)
+        self.pod_manager = PodManager(
+            self, network_name=self.network_name, ip_pool=self.ip_pool
+        )
         print("[+] MiniKubelet started as node: {}".format(self.node))
 
 
@@ -49,14 +56,14 @@ class MiniKubelet(object):
                 pod_func = self.pod_manager.update_pod
             elif action == 'delete':
                 pod_func = self.pod_manager.delete_pod
-            elif action == 'add_or_update':
-                pod_func = lambda x:self.pod_manager.update_pod(x, create=True)
             else:
                 return False
             res = None
             try:
                 res = pod_func(podspec)
             except Exception:
+                if self.debug:
+                    raise
                 pass
             if not res:
                 # enqueue back
@@ -156,6 +163,7 @@ if __name__ == '__main__':
         cert='kubelet.crt',
         apiserver='localhost',
         rbmqhost='localhost',
-        manifest_folder='./manifests'
+        manifest_folder='./manifests',
+        debug=True
     )
     minikubelet.run()
