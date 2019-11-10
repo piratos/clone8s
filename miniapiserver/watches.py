@@ -66,7 +66,7 @@ class WatchManager(object):
         self.queues[q.name] = q
         self.channel.queue_bind(
             queue=q.name,
-            exchange=self.exchange,
+            exchange=self.exchange_name,
             routing_key=q.key
         )
 
