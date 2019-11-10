@@ -37,7 +37,8 @@ class PodInterface(object):
         """
         # TODO: whyy ??
         self.spec = yaml.safe_load(podspec)
-        self.spec = yaml.safe_load(self.spec)
+        if isinstance(self.spec, str):
+            self.spec = yaml.safe_load(self.spec)
         self.name = self.spec['name'].replace(' ', '_')
         self.containers = []
         self.parent_container = Container(
