@@ -28,7 +28,7 @@ class PodManager(BaseManager):
             print("Pod {} started".format(name))
         return True
 
-    def update_pod(self, podspec):
+    def update_pod(self, podspec, create=False):
         tmp_pod = Pod(podspec)
         name = tmp_pod.name
         if name in self.k.pods:
@@ -42,7 +42,11 @@ class PodManager(BaseManager):
         else:
             # TODO: handle error properly
             print("Pod {} Does not exist".format(name))
-            return False
+            # hackish solution until we add a read file watcher
+            # over manifest folder
+            if create:
+                return self.add_pod(podspec)
+        return False
 
     def delete_pod(self, podspec):
         tmp_pod = Pod(podspec)
