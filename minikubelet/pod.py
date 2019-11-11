@@ -108,13 +108,13 @@ class PodInterface(object):
             container.container.start()
 
     def stop(self):
-        # stop non pause containers first
+        # Kill pause container then kill still running children
+        self.parent_container.container.kill()
         for container in self.containers:
             # Only kill running container
             container.container.reload()
             if container.container.status == "running":
                 container.container.kill()
-        self.parent_container.container.kill()
         # TODO: look for prune per kill
         self.client.containers.prune()
 
