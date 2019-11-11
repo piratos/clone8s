@@ -8,23 +8,27 @@ from base import BaseManager
 
 
 class NetworkManager(BaseManager):
-    def __init__(self, minikublet, rbmqhost="localhost"):
+    def __init__(self, minikublet):
         print("[+] Init NetworkManager")
         super(NetworkManager, self).__init__(minikublet)
         self.cnx = None
+        self.channel = None
+        self.consuming = False
         # the queue we listen on is named after the node
         self.queue_name = minikublet.node
+
+    def watch(self):
         try:
             credentials = pika.PlainCredentials('guest', 'guest')
             self.cnx = pika.BlockingConnection(
                 pika.ConnectionParameters(
-                    rbmqhost,
+                    self.k.apiserver,
                     credentials=credentials
                 )
             )
         except pika.exceptions.AMQPConnectionError:
             print("[!] Cannot connect to rabbitMQ at host {}".format(
-                rbmqhost))
+                self.k.apiserver))
             return
         # use channel to not load RBMQ
         self.channel = self.cnx.channel()
@@ -41,8 +45,6 @@ class NetworkManager(BaseManager):
             exchange='mini-api-server',
             routing_key=self.queue_name
         )
-        # if first time to run the node then register with apiserver
-        # else load the queue messages and start watching
 
     def post_to_apiserver(self, endpoint, payload):
         url = 'http://{0}:8080/{1}'.format(
@@ -112,6 +114,7 @@ class NetworkManager(BaseManager):
         # )
         # Then subscribe to the queue updates
         print("[+] Start consuming events")
+        self.consuming = True
         self.channel.basic_consume(
             self.queue_name,
             self.pod_callback
@@ -133,5 +136,6 @@ class NetworkManager(BaseManager):
     def stop(self):
         # Only stop cnx if it is established
         if self.cnx:
-            self.channel.stop_consuming()
-            self.cnx.close()
+            if self.consuming:
+                self.channel.stop_consuming()
+                self.cnx.close()

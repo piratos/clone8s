@@ -47,6 +47,7 @@ class PodInterface(object):
         )
         self.ip = self.spec.get("ip")
         self.network = None
+        self.hostNetwork = self.spec.get("hostNetwork", False)
         self.created = False
         self.containers_spec = self.spec['containers']
         # Create container objects
@@ -69,12 +70,16 @@ class PodInterface(object):
         if len(self.containers) < 1:
             print("Nothing to be done no containers")
             return True
+        # TODO: volumes ?
         # Start by creating a pause container as parent
+        network_mode = None
+        if self.hostNetwork:
+            network_mode = "host"
         pause_container = self.client.containers.create(
             name = self.parent_container.name,
             image = self.parent_container.image,
             detach = True,
-            network_mode = None
+            network_mode = network_mode,
         )
         self.parent_container.container = pause_container
         # Create the docker-py containers
@@ -87,9 +92,10 @@ class PodInterface(object):
                 detach = True,
                 network_mode = parent_mode,
                 ipc_mode = parent_mode,
-                pid_mode = parent_mode,
+                # TODO: why !
+                # pid_mode result in a SIGKILL propagated into containers
+                # pid_mode = parent_mode,
             )
-            print(container.container)
         self.created = True
 
     def reload(self):
@@ -109,7 +115,9 @@ class PodInterface(object):
 
     def stop(self):
         # Kill pause container then kill still running children
-        self.parent_container.container.kill()
+        self.parent_container.container.reload()
+        if self.parent_container.container.status == "running":
+            self.parent_container.container.kill()
         for container in self.containers:
             # Only kill running container
             container.container.reload()

@@ -13,8 +13,7 @@ class MiniKubelet(object):
         self,
         node,
         cert=None,
-        apiserver=None,
-        rbmqhost='localhost',
+        apiserver='localhost',
         manifest_folder='./manifests',
         ip_pool="192.168.5.0/24",
         debug=False):
@@ -38,7 +37,7 @@ class MiniKubelet(object):
         print("[+] Loading managers")
         self.log_manager = LogManager(self)
         self.metric_manager = MetricManager(self)
-        self.network_manager = NetworkManager(self, rbmqhost=rbmqhost)
+        self.network_manager = NetworkManager(self)
         self.pod_manager = PodManager(
             self, network_name=self.network_name, ip_pool=self.ip_pool
         )
@@ -47,7 +46,7 @@ class MiniKubelet(object):
 
     def control_func(self):
         if len(self.queue) > 0:
-            print("Reading podspec from internal queue")
+            print("[+] Reading podspec")
             action, podspec, tries = self.queue.pop(0)
             pod_func = None
             if action == 'add':
@@ -75,19 +74,19 @@ class MiniKubelet(object):
     def control_loop(self):
         while True:
             if self.exit:
-                print("Existing control loop")
+                print("[+] Existing control loop")
                 break
             # watch manifest folder
             self.watch_manifests()
             # apply control actions
             res = self.control_func()
             if res:
-                print("Control loop ended -1")
+                print("[+] Control loop ended")
             else:
                 pass
             # status the pods
             for name, pod in self.pods.items():
-                print("Pod {0} statuses: {1}".format(
+                print("[+] Pod {0} status: {1}".format(
                     name,
                     pod.status())
                 )
@@ -139,14 +138,19 @@ class MiniKubelet(object):
         control_loop_thread.start()
         try:
             # Make sure apiserver is up before progressing
-            print("[+] Attempting registration")
-            if self.network_manager.register_to_apiserver():
-                self.registered = True
-                # when registered a queue with the node name will be created
-                # listen on that queue
-                # TODO: move connection creations after regsitration
-                self.network_manager.receive()
             while True:
+                if not self.registered:
+                    print("[+] Attempting registration")
+                    if self.network_manager.register_to_apiserver():
+                        self.network_manager.watch()
+                        self.registered = True
+                        # when registered a queue with the node name will be created
+                        # listen on that queue
+                    if self.registered and not self.network_manager.consuming:
+                        try:
+                            self.network_manager.receive()
+                        except:
+                            self.network_manager.consuming = False
                 time.sleep(1)
                 # TODO: check sophisticated event loop framework
         except KeyboardInterrupt:
@@ -161,8 +165,7 @@ if __name__ == '__main__':
     minikubelet = MiniKubelet(
         node="node-1",
         cert='kubelet.crt',
-        apiserver='localhost',
-        rbmqhost='localhost',
+        apiserver='192.168.0.17',
         manifest_folder='./manifests',
         debug=True
     )
