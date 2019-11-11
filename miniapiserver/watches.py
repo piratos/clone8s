@@ -1,4 +1,5 @@
 import pika
+import time
 from pika.exceptions import AMQPConnectionError
 
 """
@@ -34,14 +35,25 @@ class WatchManager(object):
         }
         self.exchange_name = 'mini-api-server'
         self.exchange = None
-        try:
-            self.cnx = pika.BlockingConnection(
-                pika.ConnectionParameters(
-                    rbmq_host
+        tries = 5
+        while tries > 0:
+            try:
+                self.cnx = pika.BlockingConnection(
+                    pika.ConnectionParameters(
+                        rbmq_host
+                    )
                 )
-            )
-        except AMQPConnectionError:
-            print("Cannot connect to rabbitMQ at host {}".format(rbmq_host))
+                break
+            except AMQPConnectionError:
+                print(
+                    "[!] Cannot connect to rabbitMQ at host {}".format(
+                        rbmq_host
+                    )
+                )
+                tries -= 1
+                time.sleep(3)
+                print("[+] Tries left: ", tries)
+        if not self.cnx:
             return
         self.channel = self.cnx.channel()
         # create exchange
@@ -63,6 +75,7 @@ class WatchManager(object):
             )
     def add_queue(self, queue_name):
         q = ApiServerQueue(name=queue_name, desc=queue_name)
+        self.channel.queue_declare(q.name)
         self.queues[q.name] = q
         self.channel.queue_bind(
             queue=q.name,

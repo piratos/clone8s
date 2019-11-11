@@ -19,8 +19,8 @@ class MiniApiServer(object):
         )
         self.hostname = hostname
         self.k_manager = KubeletManager(self)
-        self.a_manager = ApiManager(self, etcd_host)
         self.w_manager = WatchManager(self, rbmq_host)
+        self.a_manager = ApiManager(self, etcd_host)
 
     def try_register_node(self, name, cert, ip):
         print("Starting registration process for node {}".format(name))
@@ -54,9 +54,9 @@ class MiniApiServer(object):
 
 if __name__ == '__main__':
     apiserver = MiniApiServer(
-        hostname='localhost',
+        hostname='0.0.0.0',
         ca_file='rootCA.crt',
         rbmq_host='localhost',
-        etcd_host='localhost'
+        etcd_host='192.168.0.17'
     )
     apiserver.run()
