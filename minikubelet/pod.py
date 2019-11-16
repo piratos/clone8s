@@ -40,7 +40,9 @@ class PodInterface(object):
         if isinstance(self.spec, str):
             self.spec = yaml.safe_load(self.spec)
         self.name = self.spec['name'].replace(' ', '_')
+        self.namespace = self.spec.get('namespace', '')
         self.containers = []
+        self.node = None
         self.parent_container = Container(
             name = "{}-pause".format(self.name),
             image = "kubernetes/pause:latest"
@@ -63,6 +65,22 @@ class PodInterface(object):
             )
         # client
         self.client = None
+
+    def gen_spec(self):
+        spec_dict = {
+            'version': 'v0',
+            'name': self.name,
+            'namespace': self.namespace,
+            'hostNetwork': self.hostNetwork,
+            'containers': [
+                    {
+                        'name': c.name,
+                        'image': c.image
+                    }
+                    for c in self.containers
+                ]
+        }
+        return yaml.dump(spec_dict)
 
     def create(self):
         if self.created:

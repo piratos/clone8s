@@ -16,6 +16,8 @@ class NetworkManager(BaseManager):
         self.consuming = False
         # the queue we listen on is named after the node
         self.queue_name = minikublet.node
+        self.node_ep = "nodes"
+        self.pod_ep = "pods"
 
     def watch(self):
         try:
@@ -66,7 +68,7 @@ class NetworkManager(BaseManager):
             'ip': self.k.ip
         }
         res = self.post_to_apiserver(
-            endpoint='nodes/1',
+            endpoint='{}/1'.format(self.node_ep),
             payload=payload
         )
         result = json.loads(res)
@@ -88,6 +90,23 @@ class NetworkManager(BaseManager):
         if res.ok:
             return res.text
         return ""
+
+    def post_pod(self, pod):
+        if not self.k.registered:
+            print("[?] Cannot post pod {}, Kubelet not registered yet")
+            return False
+        name = pod.name
+        spec = pod.gen_spec()
+        payload = {"name": name, "podspec": spec}
+        ep = '{0}/{1}'.format(self.pod_ep, name)
+        res = self.post_to_apiserver(ep, payload)
+        res = json.loads(res)
+        if res.get('result', '') == "OK":
+            print("[+] Pod {} posted to apiserver".format(name))
+            return True
+        else:
+            print("[!] Cannot post pod {} to apiserver".format(name))
+            return False
 
     def pod_callback(self, channel, method, properties, body):
         """

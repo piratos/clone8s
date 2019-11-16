@@ -69,6 +69,7 @@ class PodManager(BaseManager):
             self.connect_pod(tmp_pod)
             self.k.pods[name].start()
             print("[+] Pod {} started".format(name))
+            self.k.network_manager.post_pod(self.k.pods[name])
         return True
 
     def update_pod(self, podspec):
@@ -84,6 +85,7 @@ class PodManager(BaseManager):
             self.connect_pod(tmp_pod)
             self.k.pods[name].start()
             print("[+] Pod {} Updated".format(name))
+            self.k.network_manager.post_pod(self.k.pods[name])
             return True
         else:
             # TODO: handle error properly
