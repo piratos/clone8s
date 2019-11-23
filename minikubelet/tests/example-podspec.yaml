@@ -1,10 +1,12 @@
 version: v0
-name: dummy pod
-namespace: podnamespace
-ip: 0.0.0.0
-hostNetwork: true
-containers:
-    - name: container1
-      image: longrunningcontainer
-    - name: container2
-      image: longrunningcontainer
+kind: Pod
+spec:
+  name: dummy pod
+  namespace: podnamespace
+  ip: 0.0.0.0
+  hostNetwork: true
+  containers:
+      - name: container1
+        image: longrunningcontainer
+      - name: container2
+        image: longrunningcontainer

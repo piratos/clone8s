@@ -1,6 +1,8 @@
 import os
 import threading
 import time
+import sys
+import yaml
 
 from logs import LogManager
 from networks import NetworkManager
@@ -41,6 +43,10 @@ class MiniKubelet(object):
         self.pod_manager = PodManager(
             self, network_name=self.network_name, ip_pool=self.ip_pool
         )
+        # Halt if docker daemon is not running
+        if not self.pod_manager.client:
+            print("[!] Docker daemon is not reachable, Halting...")
+            sys.exit(1)
         print("[+] MiniKubelet started as node: {}".format(self.node))
 
 
@@ -93,6 +99,10 @@ class MiniKubelet(object):
             time.sleep(5)
 
     def watch_manifests(self):
+        def get_podspec(content):
+            spec = yaml.safe_load(content)
+            if spec.get('kind') == 'Pod':
+                return spec.get('spec', '')
         if not os.path.exists(self.manifest_folder):
             return
         deleted = list(self.local_manifests.keys())
@@ -108,7 +118,9 @@ class MiniKubelet(object):
                 if file in deleted:
                     deleted.remove(file)
                 # Build new local files list cache
-                new_holder[file] = open(file_path, 'r').read()
+                new_holder[file] = get_podspec(
+                    open(file_path, 'r').read()
+                )
                 # Check for added files
                 if file not in self.local_manifests:
                     print("[+] Treating added file {}".format(file))

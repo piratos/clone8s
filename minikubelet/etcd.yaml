@@ -1,7 +1,9 @@
 version: v0
-name: master-etcd
-namespace: master
-hostNetwork: true
-containers:
-    - name: etcd
-      image: minietcd
+kind: Pod
+spec:
+  name: master-etcd
+  namespace: master
+  hostNetwork: true
+  containers:
+      - name: etcd
+        image: minietcd

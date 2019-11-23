@@ -36,9 +36,14 @@ class PodInterface(object):
         podspec: str
         """
         # TODO: whyy ??
-        self.spec = yaml.safe_load(podspec)
-        if isinstance(self.spec, str):
-            self.spec = yaml.safe_load(self.spec)
+        if isinstance(podspec, str):
+            self.spec = yaml.safe_load(podspec)
+            if isinstance(self.spec, str):
+                self.spec = yaml.safe_load(self.spec)
+        elif isinstance(podspec, dict):
+            self.spec = podspec
+        else:
+            self.spec = dict()
         self.name = self.spec['name'].replace(' ', '_')
         self.namespace = self.spec.get('namespace', '')
         self.containers = []

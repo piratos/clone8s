@@ -1,9 +1,11 @@
 version: v0
-name: apiserver
-namespace: master
-hostNetwork: true
-containers:
-    - name: apiserver
-      image: apiserver
-    - name: rbmq-sidecar
-      image: rabbitmq:3.8.0-management
+kind: Pod
+spec:
+  name: apiserver
+  namespace: master
+  hostNetwork: true
+  containers:
+      - name: apiserver
+        image: apiserver
+      - name: rbmq-sidecar
+        image: rabbitmq:3.8.0-management

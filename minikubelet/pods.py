@@ -15,11 +15,21 @@ class Pod(PodInterface):
 class PodManager(BaseManager):
     def __init__(self, minikubelet, network_name, ip_pool):
         super(PodManager, self).__init__(minikubelet)
-        self.client = docker.from_env()
+        print("[+] Init PodManager")
+        try:
+            self.client = docker.from_env()
+            self.client.ping()
+        except:
+            print("[+] Cannot check if docker daemon is up")
+            self.client = None
+            return
         # TODO: define pod class here
         self.network_name = network_name
         self.ip_pool = ip_pool
         self.network = None
+        # Prune existed containers to not get name conflicts
+        self.client.containers.prune()
+        # create a bridge network and return
         self.create_network()
 
     def create_network(self):

@@ -1,0 +1,7 @@
+version: v0
+name: dummy_pod
+namespace: master
+hostNetwork: false
+containers:
+    - name: busybox
+      image: busybox
