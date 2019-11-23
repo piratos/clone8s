@@ -25,15 +25,17 @@ A first iteration has been added with the follwoing functionalities:
 The Pod spec is very simple
 ```
 version: v0
-name: dummy pod
-namespace: podnamespace
-hostNetwork: true
-ip: 0.0.0.0 # forcing an ip for testing purposes
-containers:
-    - name: container1
-      image: longrunningcontainer
-    - name: container2
-      image: longrunningcontainer
+kind: Pod
+spec:
+  name: dummy pod
+  namespace: podnamespace
+  hostNetwork: true
+  ip: 0.0.0.0 # forcing an ip for testing purposes
+  containers:
+      - name: container1
+        image: longrunningcontainer
+      - name: container2
+        image: longrunningcontainer
 ```
 TODOs:
 1. enrich the pod definition (and spec) with extra info for volumes
@@ -43,7 +45,9 @@ TODOs:
 5. ~Design a registration handshake~ (Done)
 6. ...
 
+
 ## Test so far
+0. An utility added that does the following steps (`installer.sh`)
 1. Create miniapiserver image
 ```
 cd miniapiserver
@@ -63,25 +67,31 @@ python3 main.py
 ```
 #> cat apiserver.yaml
 version: v0
-name: apiserver
-namespace: master
-hostNetwork: true
-#ip: 0.0.0.0 # forcing an ip for testing purposes
-containers:
-    - name: apiserver
-      image: miniapiserver
-    - name: rbmq-sidecar
-      image: rabbitmq:3.8.1-management
- 
- #> cat etcd.yaml
- version: v0
-name: etcd
-namespace: master
-hostNetwork: true
-#ip: 0.0.0.0 # forcing an ip for testing purposes
-containers:
-    - name: apiserver
-      image: minietcd
+kind: Pod
+spec:
+  name: apiserver
+  namespace: master
+  hostNetwork: true
+  #ip: 0.0.0.0 # forcing an ip for testing purposes
+  containers:
+      - name: apiserver
+        image: miniapiserver
+      - name: rbmq-sidecar
+        image: rabbitmq:3.8.1-management
+
+--- 
+
+#> cat etcd.yaml
+version: v0
+kind: Pod
+spec:
+  name: etcd
+  namespace: master
+  hostNetwork: true
+  #ip: 0.0.0.0 # forcing an ip for testing purposes
+  containers:
+      - name: apiserver
+        image: minietcd
  ```
  5. Put the etcd.yaml and the apiserver.yaml in the manifest folder as passed to minikubelet (check the call function in main.py)
  6. etcd and apiserver pods will start running and minikubelet will register to apiserver and start listening for events
